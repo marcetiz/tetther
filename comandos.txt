@@ -9,3 +9,12 @@ git config --global init.defaultBranch main
 git init
 git add .
 git commit -m "v1: copia estática y configuración de Firebase"
+
+git remote add origin https://github.com/marcetiz/tetther.git
+git config --global credential.helper store
+git push -u origin main
+
+
+git add .
+git commit -m "Descripción del cambio"
+git push
