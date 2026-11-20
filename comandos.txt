@@ -1,0 +1,11 @@
+// Para realizar DEPLOY 
+
+firebase deploy --only hosting --project tetther
+
+git config --global user.name "Marcetiz"
+git config --global user.email "marcetizalexis@gmail.com"
+git config --global init.defaultBranch main
+
+git init
+git add .
+git commit -m "v1: copia estática y configuración de Firebase"
