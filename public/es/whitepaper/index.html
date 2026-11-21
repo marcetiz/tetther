@@ -203,6 +203,20 @@
     }
   } catch (e) {}
 
+  // Intercept programmatic FontFace loading so dynamic JS fonts resolve locally offline
+  if (typeof window.FontFace === "function") {
+    var OrigFontFace = window.FontFace;
+    window.FontFace = function(family, source, descriptors) {
+      if (typeof source === "string") {
+        source = source.replace(/url\(\s*(['"]?)([^)'"]+)\1\s*\)/gi, function(match, q, ref) {
+          return 'url("' + window.__WV_RESOLVE_ASSET__(ref) + '")';
+        });
+      }
+      return new OrigFontFace(family, source, descriptors);
+    };
+    window.FontFace.prototype = OrigFontFace.prototype;
+  }
+
   // Ensure internal Gatsby <Link> clicks navigate cleanly between mirrored HTML files
   document.addEventListener("click", function(ev) {
     var anchor = ev.target && ev.target.closest ? ev.target.closest("a[href]") : null;

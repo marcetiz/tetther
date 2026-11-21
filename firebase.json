@@ -1,8 +1,6 @@
 {
   "hosting": {
-    "site": "tetther",
     "public": "public",
-    "trailingSlash": true,
     "ignore": [
       "firebase.json",
       "**/.*",
