@@ -1,10 +1,10 @@
 WEBVAULT ESTUDIO — PAQUETE DE ARCHIVADO SIN CONEXIÓN
 ====================================================
 URL de origen: https://tetther.to/es
-Fecha de captura: 2026-11-21T01:16:09.240Z
+Fecha de captura: 2026-11-21T02:50:11.216Z
 Páginas capturadas: 24
-Recursos locales (CSS, fuentes, imágenes, JS, SVG): 126
-Tamaño total: 6.49 MB
+Recursos locales (CSS, fuentes, imágenes, JS, SVG): 143
+Tamaño total: 6.82 MB
 
 CÓMO NAVEGAR SIN CONEXIÓN A INTERNET:
 1. Descomprime este archivo ZIP en cualquier carpeta de tu computadora.
