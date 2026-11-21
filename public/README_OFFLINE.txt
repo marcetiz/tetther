@@ -1,7 +1,7 @@
 WEBVAULT ESTUDIO — PAQUETE DE ARCHIVADO SIN CONEXIÓN
 ====================================================
 URL de origen: https://tetther.to/es
-Fecha de captura: 2026-11-21T02:50:11.216Z
+Fecha de captura: 2026-11-21T19:03:28.428Z
 Páginas capturadas: 24
 Recursos locales (CSS, fuentes, imágenes, JS, SVG): 143
 Tamaño total: 6.82 MB
