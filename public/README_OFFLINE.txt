@@ -1,10 +1,10 @@
 PAQUETE AUTÓNOMO EXPORTADO (SIN DEPENDENCIA DE WEBVAULT ESTUDIO)
 =================================================================
 URL de origen: https://tetther.to/es
-Fecha de exportación: 2026-11-23T02:54:36.978Z
+Fecha de exportación: 2026-11-23T03:29:34.845Z
 Páginas capturadas: 32
 Recursos locales (CSS, fuentes, imágenes, JS, SVG): 185
-Tamaño total: 25.22 MB
+Tamaño total: 25.21 MB
 
 PORTALES Y ARCHIVOS AUTÓNOMOS INCLUIDOS EN ESTE PAQUETE:
 - es/index.html -> Sitio principal
@@ -19,7 +19,7 @@ OPCIÓN A — EJECUTAR EN LOCAL CON NODE.JS (RECOMENDADO PARA PROBAR LOGIN GOOGL
 3. Abre en tu navegador: http://localhost:8080/es/index.html
 
 OPCIÓN B — PUBLICAR EN FIREBASE HOSTING / VERCEL / GITHUB PAGES:
-1. Este paquete incluye firebase.json y firestore.rules listos para Firebase Hosting.
+1. Este paquete incluye firebase.json, .firebaserc y firestore.rules listos para Firebase Hosting.
 2. Sube el contenido completo de la carpeta o ejecuta "firebase deploy".
 3. Recuerda agregar tu dominio final en Firebase Console -> Authentication -> Authorized domains.
 

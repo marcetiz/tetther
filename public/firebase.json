@@ -3,6 +3,8 @@
     "public": ".",
     "ignore": [
       "firebase.json",
+      ".firebaserc",
+      "firestore.rules",
       "server.mjs",
       "package.json",
       "**/.*",

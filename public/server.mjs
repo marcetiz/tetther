@@ -88,6 +88,14 @@ const server = http.createServer(async (req, res) => {
   try {
     let stat = await fs.stat(filePath).catch(() => null);
     if (stat && stat.isDirectory()) {
+      const qIdx = reqUrl.indexOf('?');
+      const pathOnly = qIdx !== -1 ? reqUrl.slice(0, qIdx) : reqUrl;
+      const qs = qIdx !== -1 ? reqUrl.slice(qIdx) : '';
+      if (pathOnly && !pathOnly.endsWith('/')) {
+        res.writeHead(302, { Location: pathOnly + '/' + qs });
+        res.end();
+        return;
+      }
       filePath = path.join(filePath, 'index.html');
       stat = await fs.stat(filePath).catch(() => null);
     }
