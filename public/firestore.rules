@@ -1,0 +1,369 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Pillar 0: Global default-deny safety net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Connectivity check document (contains zero PII)
+    match /test/connection {
+      allow get: if true;
+    }
+
+    // Pillar 3: Hardened global primitives
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isSignedIn() {
+      return request.auth != null && request.auth.token.email_verified == true;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isAdmin() {
+      return isSignedIn() && (
+        request.auth.token.email == 'marcetizalexis@gmail.com' ||
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid))
+      );
+    }
+
+    function isValidTimestamp(ts) {
+      return ts is timestamp;
+    }
+
+    // Entity 1: PortalUser (/users/{userId})
+    function isValidPortalUser(data) {
+      return data.keys().hasAll([
+          'uid', 'email', 'displayName', 'accountTier', 'kycStatus',
+          'bankAccountConfigured', 'usdtBalance', 'eurtBalance',
+          'mxntBalance', 'xautBalance', 'createdAt', 'updatedAt'
+        ]) &&
+        data.keys().hasOnly([
+          'uid', 'email', 'displayName', 'accountTier', 'kycStatus',
+          'bankAccountConfigured', 'usdtBalance', 'eurtBalance',
+          'mxntBalance', 'xautBalance', 'createdAt', 'updatedAt'
+        ]) &&
+        isValidId(data.uid) &&
+        data.email is string && data.email.size() >= 3 && data.email.size() <= 200 &&
+        data.displayName is string && data.displayName.size() >= 1 && data.displayName.size() <= 120 &&
+        data.accountTier in ['standard', 'verified', 'institutional'] &&
+        data.kycStatus in ['unverified', 'pending', 'verified', 'rejected'] &&
+        data.bankAccountConfigured is bool &&
+        data.usdtBalance is number && data.usdtBalance >= 0 && data.usdtBalance <= 1000000000 &&
+        data.eurtBalance is number && data.eurtBalance >= 0 && data.eurtBalance <= 1000000000 &&
+        data.mxntBalance is number && data.mxntBalance >= 0 && data.mxntBalance <= 1000000000 &&
+        data.xautBalance is number && data.xautBalance >= 0 && data.xautBalance <= 1000000 &&
+        isValidTimestamp(data.createdAt) &&
+        isValidTimestamp(data.updatedAt);
+    }
+
+    match /users/{userId} {
+      allow get: if isValidId(userId) && (isOwner(userId) || isAdmin());
+      allow list: if isAdmin();
+      allow create: if isValidId(userId) &&
+        isValidPortalUser(incoming()) &&
+        (isOwner(userId) || isAdmin()) &&
+        incoming().uid == userId &&
+        incoming().createdAt == request.time &&
+        incoming().updatedAt == request.time &&
+        (isAdmin() || (incoming().accountTier == 'standard' && incoming().kycStatus == 'unverified'));
+      allow update: if isValidId(userId) &&
+        isValidPortalUser(incoming()) &&
+        incoming().uid == existing().uid &&
+        incoming().email == existing().email &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().updatedAt == request.time &&
+        (
+          isAdmin() ||
+          (
+            isOwner(userId) &&
+            incoming().accountTier == existing().accountTier &&
+            (incoming().kycStatus == existing().kycStatus || incoming().kycStatus == 'pending') &&
+            incoming().diff(existing()).affectedKeys().hasOnly([
+              'displayName', 'bankAccountConfigured', 'kycStatus',
+              'usdtBalance', 'eurtBalance', 'mxntBalance', 'xautBalance', 'updatedAt'
+            ])
+          )
+        );
+      allow delete: if isValidId(userId) && isAdmin();
+    }
+
+    // Entity 2: PortalTransaction (/portal_transactions/{txId})
+    function isValidPortalTransaction(data) {
+      return data.keys().hasAll([
+          'userId', 'type', 'asset', 'network', 'amount', 'reference', 'status', 'createdAt', 'updatedAt'
+        ]) &&
+        data.keys().hasOnly([
+          'userId', 'type', 'asset', 'network', 'amount', 'reference', 'status', 'createdAt', 'updatedAt'
+        ]) &&
+        isValidId(data.userId) &&
+        data.type in ['deposit', 'redeem', 'transfer'] &&
+        data.asset in ['USDt', 'EURt', 'MXNt', 'XAUt'] &&
+        data.network is string && data.network.size() >= 2 && data.network.size() <= 40 &&
+        data.amount is number && data.amount > 0 && data.amount <= 10000000 &&
+        data.reference is string && data.reference.size() >= 1 && data.reference.size() <= 140 &&
+        data.status in ['pending', 'completed', 'cancelled'] &&
+        isValidTimestamp(data.createdAt) &&
+        isValidTimestamp(data.updatedAt);
+    }
+
+    match /portal_transactions/{txId} {
+      allow get: if isValidId(txId) && isSignedIn() && (existing().userId == request.auth.uid || isAdmin());
+      allow list: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow create: if isValidId(txId) &&
+        isSignedIn() &&
+        isValidPortalTransaction(incoming()) &&
+        incoming().userId == request.auth.uid &&
+        incoming().status in ['pending', 'completed'] &&
+        incoming().createdAt == request.time &&
+        incoming().updatedAt == request.time;
+      allow update: if isValidId(txId) &&
+        isSignedIn() &&
+        isValidPortalTransaction(incoming()) &&
+        incoming().userId == existing().userId &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().updatedAt == request.time &&
+        (
+          isAdmin() ||
+          (
+            existing().userId == request.auth.uid &&
+            existing().status == 'pending' &&
+            incoming().status == 'cancelled' &&
+            incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt'])
+          )
+        );
+      allow delete: if isValidId(txId) && isAdmin();
+    }
+
+    // Entity 3: KycSubmission (/kyc_submissions/{submissionId})
+    function isValidKycSubmission(data) {
+      return data.keys().hasAll([
+          'userId', 'fullName', 'country', 'documentType', 'documentNumberMasked',
+          'bankName', 'ibanOrAccountMasked', 'status', 'createdAt', 'updatedAt'
+        ]) &&
+        data.keys().hasOnly([
+          'userId', 'fullName', 'country', 'documentType', 'documentNumberMasked',
+          'bankName', 'ibanOrAccountMasked', 'status', 'createdAt', 'updatedAt'
+        ]) &&
+        isValidId(data.userId) &&
+        data.fullName is string && data.fullName.size() >= 2 && data.fullName.size() <= 120 &&
+        data.country is string && data.country.size() >= 2 && data.country.size() <= 80 &&
+        data.documentType in ['passport', 'national_id', 'corporate_registry'] &&
+        data.documentNumberMasked is string && data.documentNumberMasked.size() >= 3 && data.documentNumberMasked.size() <= 40 &&
+        data.bankName is string && data.bankName.size() >= 2 && data.bankName.size() <= 120 &&
+        data.ibanOrAccountMasked is string && data.ibanOrAccountMasked.size() >= 4 && data.ibanOrAccountMasked.size() <= 60 &&
+        data.status in ['submitted', 'in_review', 'approved', 'rejected'] &&
+        isValidTimestamp(data.createdAt) &&
+        isValidTimestamp(data.updatedAt);
+    }
+
+    match /kyc_submissions/{submissionId} {
+      allow get: if isValidId(submissionId) && isSignedIn() && (existing().userId == request.auth.uid || isAdmin());
+      allow list: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow create: if isValidId(submissionId) &&
+        isSignedIn() &&
+        isValidKycSubmission(incoming()) &&
+        incoming().userId == request.auth.uid &&
+        incoming().status == 'submitted' &&
+        incoming().createdAt == request.time &&
+        incoming().updatedAt == request.time;
+      allow update: if isValidId(submissionId) &&
+        isSignedIn() &&
+        isValidKycSubmission(incoming()) &&
+        incoming().userId == existing().userId &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().updatedAt == request.time &&
+        isAdmin();
+      allow delete: if isValidId(submissionId) && isAdmin();
+    }
+
+    // Entity 4: PortalApiKey (/portal_api_keys/{keyId})
+    function isValidPortalApiKey(data) {
+      return data.keys().hasAll([
+          'userId', 'label', 'keyPrefix', 'keyHash', 'permissions', 'status', 'createdAt', 'updatedAt'
+        ]) &&
+        data.keys().hasOnly([
+          'userId', 'label', 'keyPrefix', 'keyHash', 'permissions', 'status', 'createdAt', 'updatedAt'
+        ]) &&
+        isValidId(data.userId) &&
+        data.label is string && data.label.size() >= 2 && data.label.size() <= 80 &&
+        data.keyPrefix is string && data.keyPrefix.size() >= 8 && data.keyPrefix.size() <= 24 &&
+        data.keyHash is string && data.keyHash.size() >= 32 && data.keyHash.size() <= 128 &&
+        data.permissions is list && data.permissions.size() >= 1 && data.permissions.size() <= 5 &&
+        data.permissions[0] is string &&
+        data.permissions.hasOnly(['read', 'deposit', 'redeem', 'webhooks']) &&
+        data.status in ['active', 'revoked'] &&
+        isValidTimestamp(data.createdAt) &&
+        isValidTimestamp(data.updatedAt);
+    }
+
+    match /portal_api_keys/{keyId} {
+      allow get: if isValidId(keyId) && isSignedIn() && (existing().userId == request.auth.uid || isAdmin());
+      allow list: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow create: if isValidId(keyId) &&
+        isSignedIn() &&
+        isValidPortalApiKey(incoming()) &&
+        incoming().userId == request.auth.uid &&
+        incoming().status == 'active' &&
+        incoming().createdAt == request.time &&
+        incoming().updatedAt == request.time;
+      allow update: if isValidId(keyId) &&
+        isSignedIn() &&
+        isValidPortalApiKey(incoming()) &&
+        incoming().userId == existing().userId &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().updatedAt == request.time &&
+        (
+          isAdmin() ||
+          (
+            existing().userId == request.auth.uid &&
+            existing().status == 'active' &&
+            incoming().status == 'revoked' &&
+            incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt'])
+          )
+        );
+      allow delete: if isValidId(keyId) && isAdmin();
+    }
+
+    // Entity 5: SupportTicket (/support_tickets/{ticketId})
+    function isValidSupportTicket(data) {
+      return data.keys().hasAll([
+          'userId', 'userEmail', 'subject', 'category', 'priority', 'message', 'status', 'createdAt', 'updatedAt'
+        ]) &&
+        data.keys().hasOnly([
+          'userId', 'userEmail', 'subject', 'category', 'priority', 'message', 'status', 'createdAt', 'updatedAt'
+        ]) &&
+        isValidId(data.userId) &&
+        data.userEmail is string && data.userEmail.size() >= 3 && data.userEmail.size() <= 200 &&
+        data.subject is string && data.subject.size() >= 3 && data.subject.size() <= 160 &&
+        data.category in ['account', 'deposit_withdraw', 'kyc', 'api_technical', 'security'] &&
+        data.priority in ['normal', 'high', 'urgent'] &&
+        data.message is string && data.message.size() >= 5 && data.message.size() <= 3000 &&
+        data.status in ['open', 'in_progress', 'resolved'] &&
+        isValidTimestamp(data.createdAt) &&
+        isValidTimestamp(data.updatedAt);
+    }
+
+    match /support_tickets/{ticketId} {
+      allow get: if isValidId(ticketId) && isSignedIn() && (existing().userId == request.auth.uid || isAdmin());
+      allow list: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow create: if isValidId(ticketId) &&
+        isSignedIn() &&
+        isValidSupportTicket(incoming()) &&
+        incoming().userId == request.auth.uid &&
+        incoming().status == 'open' &&
+        incoming().createdAt == request.time &&
+        incoming().updatedAt == request.time;
+      allow update: if isValidId(ticketId) &&
+        isSignedIn() &&
+        isValidSupportTicket(incoming()) &&
+        incoming().userId == existing().userId &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().updatedAt == request.time &&
+        (
+          isAdmin() ||
+          (
+            existing().userId == request.auth.uid &&
+            existing().status != 'resolved' &&
+            incoming().status == 'resolved' &&
+            incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt'])
+          )
+        );
+      allow delete: if isValidId(ticketId) && isAdmin();
+    }
+
+    // Entity 6: BountyReport (/bounty_reports/{reportId})
+    function isValidBountyReport(data) {
+      return data.keys().hasAll([
+          'userId', 'reporterName', 'reporterEmail', 'targetProduct',
+          'vulnerabilityTitle', 'severity', 'summary', 'stepsToReproduce',
+          'impact', 'attachmentName', 'status', 'createdAt', 'updatedAt'
+        ]) &&
+        data.keys().hasOnly([
+          'userId', 'reporterName', 'reporterEmail', 'targetProduct',
+          'vulnerabilityTitle', 'severity', 'summary', 'stepsToReproduce',
+          'impact', 'attachmentName', 'status', 'createdAt', 'updatedAt'
+        ]) &&
+        isValidId(data.userId) &&
+        data.reporterName is string && data.reporterName.size() >= 1 && data.reporterName.size() <= 120 &&
+        data.reporterEmail is string && data.reporterEmail.size() >= 3 && data.reporterEmail.size() <= 200 &&
+        data.targetProduct in ['tetther.to', 'app.tetther.to', 'api', 'smart_contracts'] &&
+        data.vulnerabilityTitle is string && data.vulnerabilityTitle.size() >= 3 && data.vulnerabilityTitle.size() <= 180 &&
+        data.severity in ['low', 'medium', 'high', 'critical'] &&
+        data.summary is string && data.summary.size() >= 5 && data.summary.size() <= 2000 &&
+        data.stepsToReproduce is string && data.stepsToReproduce.size() >= 5 && data.stepsToReproduce.size() <= 3000 &&
+        data.impact is string && data.impact.size() >= 3 && data.impact.size() <= 2000 &&
+        data.attachmentName is string && data.attachmentName.size() <= 200 &&
+        data.status in ['received', 'triaging', 'accepted', 'resolved', 'rejected'] &&
+        isValidTimestamp(data.createdAt) &&
+        isValidTimestamp(data.updatedAt);
+    }
+
+    match /bounty_reports/{reportId} {
+      allow get: if isValidId(reportId) && isSignedIn() && (existing().userId == request.auth.uid || isAdmin());
+      allow list: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow create: if isValidId(reportId) &&
+        isSignedIn() &&
+        isValidBountyReport(incoming()) &&
+        incoming().userId == request.auth.uid &&
+        incoming().status == 'received' &&
+        incoming().createdAt == request.time &&
+        incoming().updatedAt == request.time;
+      allow update: if isValidId(reportId) &&
+        isSignedIn() &&
+        isValidBountyReport(incoming()) &&
+        incoming().userId == existing().userId &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().updatedAt == request.time &&
+        isAdmin();
+      allow delete: if isValidId(reportId) && isAdmin();
+    }
+
+    // Entity 7: ServiceStatusLog (/service_status_logs/{checkId})
+    function isValidServiceStatusLog(data) {
+      return data.keys().hasAll([
+          'userId', 'overallStatus', 'healthyCount', 'totalCount', 'summaryNote', 'checkedAt'
+        ]) &&
+        data.keys().hasOnly([
+          'userId', 'overallStatus', 'healthyCount', 'totalCount', 'summaryNote', 'checkedAt'
+        ]) &&
+        isValidId(data.userId) &&
+        data.overallStatus in ['operational', 'degraded', 'outage'] &&
+        data.healthyCount is number && data.healthyCount >= 0 && data.healthyCount <= 100 &&
+        data.totalCount is number && data.totalCount >= 1 && data.totalCount <= 100 &&
+        data.summaryNote is string && data.summaryNote.size() >= 1 && data.summaryNote.size() <= 500 &&
+        isValidTimestamp(data.checkedAt);
+    }
+
+    match /service_status_logs/{checkId} {
+      allow get: if isValidId(checkId) && isSignedIn() && (existing().userId == request.auth.uid || isAdmin());
+      allow list: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow create: if isValidId(checkId) &&
+        isSignedIn() &&
+        isValidServiceStatusLog(incoming()) &&
+        incoming().userId == request.auth.uid &&
+        incoming().checkedAt == request.time;
+      allow update: if false;
+      allow delete: if isValidId(checkId) && isAdmin();
+    }
+
+    // Entity 8: AdminMarker (/admins/{adminUid})
+    match /admins/{adminUid} {
+      allow get: if isValidId(adminUid) && (isOwner(adminUid) || isAdmin());
+      allow list: if isAdmin();
+      allow create, update, delete: if isValidId(adminUid) && isAdmin();
+    }
+  }
+}
