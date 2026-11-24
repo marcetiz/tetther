@@ -1,10 +1,10 @@
 PAQUETE AUTÓNOMO EXPORTADO (SIN DEPENDENCIA DE WEBVAULT ESTUDIO)
 =================================================================
 URL de origen: https://tetther.to/es
-Fecha de exportación: 2026-11-23T03:29:34.845Z
+Fecha de exportación: 2026-11-24T16:55:45.388Z
 Páginas capturadas: 32
-Recursos locales (CSS, fuentes, imágenes, JS, SVG): 185
-Tamaño total: 25.21 MB
+Recursos locales (CSS, fuentes, imágenes, JS, SVG): 188
+Tamaño total: 25.58 MB
 
 PORTALES Y ARCHIVOS AUTÓNOMOS INCLUIDOS EN ESTE PAQUETE:
 - es/index.html -> Sitio principal

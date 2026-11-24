@@ -263,12 +263,25 @@
     var trimmed = rawUrl.trim();
     if (!trimmed || trimmed.startsWith("data:") || trimmed.startsWith("blob:") || trimmed.startsWith("#")) return rawUrl;
     var map = window.__WV_ASSET_MAP__ || {};
-    var key = trimmed;
+    var candidate = trimmed;
+    if (window.__WV_GATSBY_BASE__ && candidate.indexOf(window.__WV_GATSBY_BASE__) === 0) {
+      candidate = "/" + candidate.slice(window.__WV_GATSBY_BASE__.length).replace(/^\/+/, "");
+    } else if (candidate.indexOf("/assets/gatsby/") !== -1) {
+      candidate = "/" + candidate.slice(candidate.indexOf("/assets/gatsby/") + "/assets/gatsby/".length).replace(/^\/+/, "");
+    } else if (window.__WV_BASE_URL__ && candidate.indexOf(window.__WV_BASE_URL__) === 0) {
+      var afterBase = candidate.slice(window.__WV_BASE_URL__.length).replace(/^\/+/, "");
+      if (/^(?:static|images|fonts|public)\//i.test(afterBase)) {
+        candidate = "/" + afterBase;
+      }
+    } else if (/^(?:static|images|fonts|public)\//i.test(candidate)) {
+      candidate = "/" + candidate;
+    }
+    var key = candidate;
     if (key.startsWith("https://")) key = key.slice(6);
     else if (key.startsWith("http://")) key = key.slice(5);
-    var hit = map[trimmed] || map[key];
-    if (!hit && trimmed.indexOf("?") !== -1) {
-      var noQ = trimmed.split("?")[0];
+    var hit = map[candidate] || map[key] || map[trimmed];
+    if (!hit && candidate.indexOf("?") !== -1) {
+      var noQ = candidate.split("?")[0];
       var keyNoQ = key.split("?")[0];
       hit = map[noQ] || map[keyNoQ];
     }
